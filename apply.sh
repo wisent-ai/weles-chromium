@@ -37,5 +37,3 @@ if ! git am "$HERE"/patches/0[0-9]*-*.patch; then
 fi
 
 echo "[apply] done. Series applied on $BRANCH." >&2
-echo "[apply] NOTE: patches/UNCOMMITTED-working-tree.patch is intentionally NOT applied;" >&2
-echo "[apply]       git apply it manually if you want the uncommitted WIP." >&2

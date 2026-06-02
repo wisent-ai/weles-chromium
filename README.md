@@ -37,7 +37,8 @@ drop-in upstream chrome. The JSON schema mirrors `weles.fingerprint.toCppConfig`
 | `0003-weles-remove-unreachable-code-in-PrepareForAuthResta...` | Cleanup in the proxy auth-restart path. |
 | `0004-weles-wrap-canvas-noise-pixmap-access-in-UNSAFE_BUFF...` | Wraps the canvas-noise pixmap access in `UNSAFE_BUFFERS()` for the newer Chromium buffer-safety lint. |
 | `0005-weles-drop-unused-cfg-binding-in-Navigator-webdriver...` | Trivial unused-binding cleanup in `Navigator::webdriver()`. |
-| `UNCOMMITTED-working-tree.patch` | **Not part of the reviewed series.** A snapshot of 5 files modified in the local `weles-147` working tree but not yet committed (`input_handler.{cc,h}`, `v8_binding_for_core.cc`, `thread_restrictions.cc`, `tab_stats_data_store.cc`; +40/−9). Captured so the work isn't lost on a fresh checkout — commit it into `weles-147` and re-export, or drop it. |
+| `0006-weles-stamp-movement_x-y-on-CDP-synthesized-mouse-ev...` | Stamps `movement_x/movement_y` on CDP-synthesized mouse events from the InputHandler's tracked previous position (sentinel so the first event reports movement 0, like a real mouse entering the window). CDP leaves these at 0 by default — the bot signature LinkedIn `/apfc/collect` and Arkose read. |
+| `0007-weles-mirror-release-channel-behavior-for-3-dcheck_a...` | Neutralizes 3 `dcheck_always_on` aborts that fire during real automation where stock release Chromium silently continues: `AssertBlockingAllowed` (TikTok captcha WASM sync I/O), `TabStatsDataStore::OnWindowRemoved` (TikTok verify SDK popup-iframe counter underflow), `ToV8ContextMaybeEmpty` (Arkose/GitHub nav transient detached-frame context). Each mirrors release-channel behavior, not a blind bypass. |
 
 ## Applying
 
@@ -46,11 +47,7 @@ drop-in upstream chrome. The JSON schema mirrors `weles.fingerprint.toCppConfig`
 bash apply.sh /path/to/chromium/src
 # or by hand, from chromium/src:
 git checkout -b weles-147 e74a8f5bfafeb
-git am /path/to/weles-chromium/patches/0001-*.patch \
-       /path/to/weles-chromium/patches/0002-*.patch \
-       /path/to/weles-chromium/patches/0003-*.patch \
-       /path/to/weles-chromium/patches/0004-*.patch \
-       /path/to/weles-chromium/patches/0005-*.patch
+git am /path/to/weles-chromium/patches/0*.patch
 ```
 
 If context has shifted on a newer upstream, `git am -3` (3-way) resolves most

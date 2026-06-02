@@ -1,7 +1,7 @@
 From ecbe848df07bb58b37ab41fbcc3b87be9acb3c4d Mon Sep 17 00:00:00 2001
 From: weles <weles@local>
 Date: Fri, 17 Apr 2026 21:52:32 -0700
-Subject: [PATCH 1/5] Weles modifications rebased onto Chromium 147.0.7727.108
+Subject: [PATCH 1/7] Weles modifications rebased onto Chromium 147.0.7727.108
 
 Cherry-picked weles-145 HEAD (6d3e502726301) onto 147.0.7727.108
 (e74a8f5bfafeb). 4 files had real merge conflicts, resolved:

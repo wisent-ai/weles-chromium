@@ -1,0 +1,63 @@
+From 99a6af9f250f4f0eaac24e7b72a56c6adff0d823 Mon Sep 17 00:00:00 2001
+From: lbartoszcze <lukasz@wisent.ai>
+Date: Tue, 2 Jun 2026 08:43:18 -0700
+Subject: [PATCH 6/7] weles: stamp movement_x/y on CDP-synthesized mouse events
+
+CDP InputHandler::HandleMouseEvent leaves movement_x/movement_y at 0 on
+synthesized events; LinkedIn /apfc/collect and Arkose read that as a bot
+signature. Track the previous mouse position (sentinel -1 so the first
+event after session start reports movement 0, matching a real OS mouse
+that just entered the window) and stamp the delta on every non-wheel event.
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+---
+ .../browser/devtools/protocol/input_handler.cc  | 17 +++++++++++++++++
+ .../browser/devtools/protocol/input_handler.h   |  7 +++++++
+ 2 files changed, 24 insertions(+)
+
+diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browser/devtools/protocol/input_handler.cc
+index 7bab54f7a77d6..896bc0b4bdec1 100644
+--- a/content/browser/devtools/protocol/input_handler.cc
++++ b/content/browser/devtools/protocol/input_handler.cc
+@@ -1383,6 +1383,23 @@ void InputHandler::HandleMouseEvent(
+   bool is_wheel_event =
+       event->GetType() == blink::WebInputEvent::Type::kMouseWheel;
+ 
++  // Weles: stamp movement_x/y from the CDP InputHandler's tracked previous
++  // position. CDP-synthesized events leave these at 0 by default, which is
++  // the bot signature LinkedIn /apfc/collect (and Arkose) read. First event
++  // after session start has movement=0 to match "mouse just entered window".
++  if (!is_wheel_event) {
++    gfx::PointF p = event->PositionInWidget();
++    if (last_mouse_x_ < 0.0) {
++      event->movement_x = 0;
++      event->movement_y = 0;
++    } else {
++      event->movement_x = static_cast<int>(p.x() - last_mouse_x_);
++      event->movement_y = static_cast<int>(p.y() - last_mouse_y_);
++    }
++    last_mouse_x_ = p.x();
++    last_mouse_y_ = p.y();
++  }
++
+   RenderWidgetHostImpl* widget_host =
+       host_ ? host_->GetRenderWidgetHost() : nullptr;
+   if (!widget_host || !widget_host->delegate() ||
+diff --git a/content/browser/devtools/protocol/input_handler.h b/content/browser/devtools/protocol/input_handler.h
+index 4c25a8c1c26c3..0cd285e4390ad 100644
+--- a/content/browser/devtools/protocol/input_handler.h
++++ b/content/browser/devtools/protocol/input_handler.h
+@@ -365,6 +365,13 @@ class InputHandler : public DevToolsDomainHandler, public Input::Backend {
+   std::set<int> pointer_ids_;
+   std::unique_ptr<SyntheticPointerDriver> synthetic_pointer_driver_;
+   base::flat_map<blink::PointerId, blink::WebTouchPoint> touch_points_;
++  // Weles: track previous mouse coords so we can stamp movement_x/y on every
++  // dispatched mouse event. CDP-synthesized events historically had
++  // movement_x=movement_y=0, which LinkedIn /apfc/collect and Arkose read as a
++  // bot signature. Initialised to a sentinel (-1) so the first event has
++  // movement = 0 (matches a real OS mouse that just entered the window).
++  double last_mouse_x_ = -1.0;
++  double last_mouse_y_ = -1.0;
+   base::WeakPtrFactory<InputHandler> weak_factory_{this};
+ };
+ 

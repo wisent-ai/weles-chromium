@@ -1,7 +1,7 @@
 From 11485e78c5809fcafcfdbd6d428bc12773afcdd5 Mon Sep 17 00:00:00 2001
 From: lbartoszcze <lgb2127@columbia.edu>
 Date: Tue, 21 Apr 2026 13:52:13 -0700
-Subject: [PATCH 4/5] weles: wrap canvas-noise pixmap access in
+Subject: [PATCH 4/7] weles: wrap canvas-noise pixmap access in
  UNSAFE_BUFFERS()
 
 The NoiseCanvasPixmap helper does raw pointer arithmetic + indexed
