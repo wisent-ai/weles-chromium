@@ -1,0 +1,9 @@
+# This repo carries ONLY the patch series + docs — never a Chromium checkout
+# or build output. Guard against accidentally committing a multi-GB tree.
+src/
+out/
+*.app/
+*.tar.gz
+*.tar.gz.sha256
+depot_tools/
+.DS_Store

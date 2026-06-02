@@ -1,0 +1,88 @@
+From 37ebbbdce58068faebd77998b427edf601747eda Mon Sep 17 00:00:00 2001
+From: lbartoszcze <lgb2127@columbia.edu>
+Date: Mon, 20 Apr 2026 12:05:51 -0700
+Subject: [PATCH 2/5] input_handler: backdate CDP event timestamps + realistic
+ pointer pressure
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+GetEventTimeTicks subtracts 8-25ms jittered from the provided/current
+timestamp. CDP synthesises events inside the browser process with ~0ms
+propagation delay; real OS keyboard/mouse events accumulate 5-50ms via
+HID poll + kernel + compositor queue. GitHub's
+browser.vitals.dist.typing.avg_input_delay telemetry reads the Event
+Timing API (processingStart - eventTime) and flagged sub-ms values as
+bot; backdating the timestamp makes the handler-entry measurement match
+a real OS input path.
+
+CreateWebMouseEvent: default mouse_event->force to 0.5 when type is
+kMouseDown or a MouseMove has buttons > 0. CDP callers (Playwright) that
+don't pass force defaulted to 0 always, producing pressed events with
+PointerEvent.pressure=0 — a deterministic bot signature. Real Chrome
+returns 0.5 for mouse pointer type when a button is pressed.
+
+Co-Authored-By: Claude Opus 4.7 (1M context) <noreply@anthropic.com>
+---
+ .../devtools/protocol/input_handler.cc        | 34 +++++++++++++++----
+ 1 file changed, 28 insertions(+), 6 deletions(-)
+
+diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browser/devtools/protocol/input_handler.cc
+index 609f24656fd2d..7bab54f7a77d6 100644
+--- a/content/browser/devtools/protocol/input_handler.cc
++++ b/content/browser/devtools/protocol/input_handler.cc
+@@ -17,6 +17,7 @@
+ #include "base/functional/callback.h"
+ #include "base/functional/callback_helpers.h"
+ #include "base/memory/raw_ptr.h"
++#include "base/rand_util.h"
+ #include "base/strings/stringprintf.h"
+ #include "base/strings/utf_string_conversions.h"
+ #include "base/task/single_thread_task_runner.h"
+@@ -127,11 +128,22 @@ int GetEventModifiers(int modifiers,
+ }
+ 
+ base::TimeTicks GetEventTimeTicks(const std::optional<double>& timestamp) {
+-  // Convert timestamp, in seconds since unix epoch, to an event timestamp
+-  // which is time ticks since platform start time.
+-  return timestamp.has_value()
+-             ? base::Seconds(timestamp.value()) + base::TimeTicks::UnixEpoch()
+-             : base::TimeTicks::Now();
++  base::TimeTicks ts =
++      timestamp.has_value()
++          ? base::Seconds(timestamp.value()) + base::TimeTicks::UnixEpoch()
++          : base::TimeTicks::Now();
++  // Weles: backdate event timestamps by 8-25ms jittered. CDP synthesizes
++  // events inside the browser process with ~0ms propagation delay; a real
++  // OS keyboard/mouse event accumulates 5-50ms via HID poll + kernel +
++  // compositor queue. GitHub's browser.vitals.dist.typing.avg_input_delay
++  // telemetry reads the Event Timing API (processingStart - eventTime) and
++  // flags sub-ms values as bot -> Arkose escalates to PoW tier ->
++  // "unusual activity" final reject. Verified 2026-04-19 via side-by-side
++  // JSON diff of human-weles (passed, no typing metrics) vs bot-CDP
++  // (failed, 0.27ms avg_input_delay) and bot-cliclick (improved, 2ms
++  // avg_input_delay). Backdating the timestamp makes the renderer's
++  // handler-entry measurement match a real OS input path.
++  return ts - base::Milliseconds(8 + static_cast<int>(base::RandUint64() % 18));
+ }
+ 
+ bool SetKeyboardEventText(
+@@ -455,7 +467,17 @@ CreateWebMouseEvent(const std::string& event_type,
+   mouse_event->button = event_button;
+   mouse_event->click_count = click_count.value_or(0);
+   mouse_event->pointer_type = GetPointerType(pointer_type.value_or(""));
+-  mouse_event->force = force.value_or(0);
++  // Weles: real mouse PointerEvent.pressure is 0.5 when a button is pressed
++  // (Chrome's default for mouse pointer type) and 0 when no button is pressed.
++  // CDP callers that don't set force (Playwright) default to 0 always, which
++  // produces pressed events with pressure=0 — a reliable bot signature for
++  // Arkose. Derive a realistic default from event type + buttons mask.
++  float default_force = 0.0f;
++  if (type == blink::WebInputEvent::Type::kMouseDown ||
++      (type == blink::WebInputEvent::Type::kMouseMove && buttons.value_or(0) > 0)) {
++    default_force = 0.5f;
++  }
++  mouse_event->force = force.value_or(default_force);
+   mouse_event->tangential_pressure = tangential_pressure.value_or(0);
+   mouse_event->tilt_x = tilt_x.value_or(0);
+   mouse_event->tilt_y = tilt_y.value_or(0);

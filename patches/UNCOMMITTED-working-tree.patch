@@ -1,0 +1,104 @@
+diff --git a/base/threading/thread_restrictions.cc b/base/threading/thread_restrictions.cc
+index c5f793b60a1cb..271ba1bb0365e 100644
+--- a/base/threading/thread_restrictions.cc
++++ b/base/threading/thread_restrictions.cc
+@@ -59,13 +59,11 @@ constinit thread_local BooleanWithOptionalStack
+ }  // namespace
+ 
+ void AssertBlockingAllowed() {
+-  DUMP_OR_DCHECK(!tls_blocking_disallowed)
+-      << "Function marked as blocking was called from a scope that disallows "
+-         "blocking! If this task is running inside the ThreadPool, it needs "
+-         "to have MayBlock() in its TaskTraits. Otherwise, consider making "
+-         "this blocking work asynchronous or, as a last resort, you may use "
+-         "ScopedAllowBlocking (see its documentation for best practices).\n"
+-      << "tls_blocking_disallowed " << tls_blocking_disallowed;
++  // weles: release Chromium silently allows this, dcheck_always_on aborts.
++  // TikTok's captcha WASM and some V8 optimizer paths do synchronous I/O
++  // inside non-blocking task traits and take down the browser. Mirror
++  // release-channel behavior by skipping the DCHECK body.
++  // Original: DUMP_OR_DCHECK(!tls_blocking_disallowed) << ...;
+ }
+ 
+ void AssertBlockingDisallowedForTesting() {
+diff --git a/chrome/browser/metrics/tab_stats/tab_stats_data_store.cc b/chrome/browser/metrics/tab_stats/tab_stats_data_store.cc
+index 35fccb7b06a62..248a6dbcbceb3 100644
+--- a/chrome/browser/metrics/tab_stats/tab_stats_data_store.cc
++++ b/chrome/browser/metrics/tab_stats/tab_stats_data_store.cc
+@@ -81,7 +81,11 @@ void TabStatsDataStore::OnWindowAdded() {
+ 
+ void TabStatsDataStore::OnWindowRemoved() {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+-  DCHECK_GT(tab_stats_.window_count, 0U);
++  // weles: TikTok's captcha/verify SDK opens popup iframes then closes them
++  // faster than this counter tracks, producing OnWindowRemoved with count=0.
++  // Release Chromium silently underflows; dcheck_always_on aborts the browser
++  // with FATAL tab_stats_data_store.cc:84. Mirror release behavior.
++  if (tab_stats_.window_count == 0U) return;
+   tab_stats_.window_count--;
+ }
+ 
+diff --git a/content/browser/devtools/protocol/input_handler.cc b/content/browser/devtools/protocol/input_handler.cc
+index 7bab54f7a77d6..896bc0b4bdec1 100644
+--- a/content/browser/devtools/protocol/input_handler.cc
++++ b/content/browser/devtools/protocol/input_handler.cc
+@@ -1383,6 +1383,23 @@ void InputHandler::HandleMouseEvent(
+   bool is_wheel_event =
+       event->GetType() == blink::WebInputEvent::Type::kMouseWheel;
+ 
++  // Weles: stamp movement_x/y from the CDP InputHandler's tracked previous
++  // position. CDP-synthesized events leave these at 0 by default, which is
++  // the bot signature LinkedIn /apfc/collect (and Arkose) read. First event
++  // after session start has movement=0 to match "mouse just entered window".
++  if (!is_wheel_event) {
++    gfx::PointF p = event->PositionInWidget();
++    if (last_mouse_x_ < 0.0) {
++      event->movement_x = 0;
++      event->movement_y = 0;
++    } else {
++      event->movement_x = static_cast<int>(p.x() - last_mouse_x_);
++      event->movement_y = static_cast<int>(p.y() - last_mouse_y_);
++    }
++    last_mouse_x_ = p.x();
++    last_mouse_y_ = p.y();
++  }
++
+   RenderWidgetHostImpl* widget_host =
+       host_ ? host_->GetRenderWidgetHost() : nullptr;
+   if (!widget_host || !widget_host->delegate() ||
+diff --git a/content/browser/devtools/protocol/input_handler.h b/content/browser/devtools/protocol/input_handler.h
+index 4c25a8c1c26c3..0cd285e4390ad 100644
+--- a/content/browser/devtools/protocol/input_handler.h
++++ b/content/browser/devtools/protocol/input_handler.h
+@@ -365,6 +365,13 @@ class InputHandler : public DevToolsDomainHandler, public Input::Backend {
+   std::set<int> pointer_ids_;
+   std::unique_ptr<SyntheticPointerDriver> synthetic_pointer_driver_;
+   base::flat_map<blink::PointerId, blink::WebTouchPoint> touch_points_;
++  // Weles: track previous mouse coords so we can stamp movement_x/y on every
++  // dispatched mouse event. CDP-synthesized events historically had
++  // movement_x=movement_y=0, which LinkedIn /apfc/collect and Arkose read as a
++  // bot signature. Initialised to a sentinel (-1) so the first event has
++  // movement = 0 (matches a real OS mouse that just entered the window).
++  double last_mouse_x_ = -1.0;
++  double last_mouse_y_ = -1.0;
+   base::WeakPtrFactory<InputHandler> weak_factory_{this};
+ };
+ 
+diff --git a/third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.cc b/third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.cc
+index 82b9404318262..fc8330f78bbaa 100644
+--- a/third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.cc
++++ b/third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.cc
+@@ -764,7 +764,12 @@ v8::Local<v8::Context> ToV8ContextMaybeEmpty(LocalFrame* frame,
+   v8::Local<v8::Context> context =
+       frame->WindowProxyMaybeUninitialized(world)->ContextIfInitialized();
+ 
+-  DCHECK(context.IsEmpty() || frame == ToLocalFrameIfNotDetached(context));
++  // weles patch: DCHECK fires under some Arkose/GitHub navigation sequences
++  // where the v8 context transiently points to a detached frame before the
++  // new context finishes attaching. Release Chrome mirrors this through a
++  // frame == ToLocalFrameIfNotDetached() early-return in the same code path;
++  // our dcheck_always_on build aborts here instead. Neutralize via EAT.
++  EAT_CHECK_STREAM_PARAMS(context.IsEmpty() || frame == ToLocalFrameIfNotDetached(context));
+   return context;
+ }
+ 

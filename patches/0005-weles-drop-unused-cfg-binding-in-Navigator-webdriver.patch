@@ -1,0 +1,30 @@
+From 2c704e8d6417d58b270cdfb3b269efe6d62e4bf0 Mon Sep 17 00:00:00 2001
+From: lbartoszcze <lgb2127@columbia.edu>
+Date: Tue, 21 Apr 2026 15:00:58 -0700
+Subject: [PATCH 5/5] weles: drop unused 'cfg' binding in
+ Navigator::webdriver()
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The webdriver() override only tests whether WelesFingerprintConfig is
+active — it doesn't read any field of the config. Binding to 'auto* cfg'
+triggered -Werror -Wunused-but-set-variable on Linux. Test the pointer
+inline instead.
+---
+ third_party/blink/renderer/core/frame/navigator.cc | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/third_party/blink/renderer/core/frame/navigator.cc b/third_party/blink/renderer/core/frame/navigator.cc
+index c082d1a38b054..03f87495d7c8f 100644
+--- a/third_party/blink/renderer/core/frame/navigator.cc
++++ b/third_party/blink/renderer/core/frame/navigator.cc
+@@ -114,7 +114,7 @@ bool Navigator::webdriver() const {
+   // Weles: always return false. CloakBrowser's approach — handle at
+   // compile time instead of via --disable-blink-features flag, which
+   // is itself a detectable automation signal.
+-  if (auto* cfg = WelesFingerprintConfig::Get())
++  if (WelesFingerprintConfig::Get())
+     return false;
+   if (RuntimeEnabledFeatures::AutomationControlledEnabled())
+     return true;

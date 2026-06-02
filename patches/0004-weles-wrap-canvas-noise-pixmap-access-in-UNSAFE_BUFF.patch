@@ -1,0 +1,47 @@
+From 11485e78c5809fcafcfdbd6d428bc12773afcdd5 Mon Sep 17 00:00:00 2001
+From: lbartoszcze <lgb2127@columbia.edu>
+Date: Tue, 21 Apr 2026 13:52:13 -0700
+Subject: [PATCH 4/5] weles: wrap canvas-noise pixmap access in
+ UNSAFE_BUFFERS()
+
+The NoiseCanvasPixmap helper does raw pointer arithmetic + indexed
+writes into the SkData backing buffer to flip a single LSB on ~25%
+of pixels. Chromium's -Werror -Wunsafe-buffer-usage flags that at
+build time on Linux. The three sites (memcpy, base+y*row_bytes,
+row[x*4+channel]) are all bounded by SkImageInfo::computeByteSize,
+so wrapping each in UNSAFE_BUFFERS() is the correct annotation.
+---
+ .../blink/renderer/platform/graphics/image_data_buffer.cc   | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/third_party/blink/renderer/platform/graphics/image_data_buffer.cc b/third_party/blink/renderer/platform/graphics/image_data_buffer.cc
+index cf89e89eef903..d8582769c59e5 100644
+--- a/third_party/blink/renderer/platform/graphics/image_data_buffer.cc
++++ b/third_party/blink/renderer/platform/graphics/image_data_buffer.cc
+@@ -76,7 +76,7 @@ NoisedPixmap NoiseCanvasPixmap(const SkPixmap& src, uint64_t seed) {
+     return {SkPixmap(), nullptr};
+ 
+   sk_sp<SkData> data = SkData::MakeUninitialized(total_bytes);
+-  std::memcpy(data->writable_data(), src.addr(), total_bytes);
++  UNSAFE_BUFFERS(std::memcpy(data->writable_data(), src.addr(), total_bytes));
+ 
+   const SkColorType ct = info.colorType();
+   const int bpp = info.bytesPerPixel();
+@@ -88,7 +88,7 @@ NoisedPixmap NoiseCanvasPixmap(const SkPixmap& src, uint64_t seed) {
+     const int width = info.width();
+     const int height = info.height();
+     for (int y = 0; y < height; ++y) {
+-      uint8_t* row = base + (static_cast<size_t>(y) * row_bytes);
++      uint8_t* row = UNSAFE_BUFFERS(base + (static_cast<size_t>(y) * row_bytes));
+       for (int x = 0; x < width; ++x) {
+         uint64_t h = SplitMix64(seed ^
+                                 (static_cast<uint64_t>(x) << 32) ^
+@@ -99,7 +99,7 @@ NoisedPixmap NoiseCanvasPixmap(const SkPixmap& src, uint64_t seed) {
+           int channel = static_cast<int>((h >> 60) & 0x3);
+           if (channel > 2)
+             channel = 2;
+-          row[x * 4 + channel] ^= 0x01;
++          UNSAFE_BUFFERS(row[x * 4 + channel] ^= 0x01);
+         }
+       }
+     }
