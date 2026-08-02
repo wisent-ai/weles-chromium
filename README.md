@@ -3,13 +3,13 @@
 The weles fingerprint-defense patch series for Chromium, as a reviewable
 patch set (parallel to [`wisent-ai/weles-firefox`](https://github.com/wisent-ai/weles-firefox)).
 
-The compiled binaries ship as GitHub Releases on
-[`wisent-ai/weles`](https://github.com/wisent-ai/weles)
-(tag scheme `chromium-<upstream-version>-weles.N`) and hosts install them via
-`weles/scripts/chromium/download.sh`. **This repo is the _source of truth for
-the C++ delta_** — the small set of engine-level changes that turn a stock
-Chromium into the weles binary. It does **not** vendor the ~116 GB Chromium
-checkout; it carries only the patches that apply on top of a pinned upstream.
+Compiled binaries ship from this repository's own GitHub Releases channel using
+the tag scheme `chromium-<upstream-version>-weles.N`. Weles hosts consume that
+channel through `weles/scripts/chromium/download.sh`.
+
+This repository is the source of truth for the C++ delta and the release
+contract. It does not vendor the Chromium checkout; it carries only the patches
+that apply on top of a pinned upstream.
 
 ## Upstream base
 
@@ -53,20 +53,23 @@ git am /path/to/weles-chromium/patches/0*.patch
 If context has shifted on a newer upstream, `git am -3` (3-way) resolves most
 hunks; fix any `.rej`, `git add`, `git am --continue`.
 
-## Building & releasing
+## Building and releasing
 
-Building is driven from the `weles` repo, not here — it expects the patched tree
-at `../chromium-build/src` with an `out/Weles` GN config:
+Builds use an external patched Chromium checkout with an `out/Weles` GN config.
+The release script reads the version from the built browser and publishes the
+platform archive plus checksum to `wisent-ai/weles-chromium`:
 
 ```bash
-# in weles/
-bash scripts/chromium/build.sh             # autoninja (~4 h), then auto-publish
-bash scripts/chromium/build.sh --dry-run   # build, preview the release
+bash scripts/build.sh
+
+# Publish an existing build without rebuilding:
+CHROMIUM_BUILD_OUT=/path/to/chromium/src/out/Weles bash scripts/release.sh
 ```
 
-`release.sh` reads the version from the built binary, cuts a fresh
-`chromium-<ver>-weles.N` release on `wisent-ai/weles`, bumps the pin in
-`download.sh`, and pushes so every host auto-deploys within ~60 s.
+The publisher creates an immutable
+`chromium-<upstream-version>-weles.N` release. After publication, update the
+`WELES_CHROMIUM_RELEASE` pin in the Weles repository deliberately; this
+repository never commits into a consumer repository.
 
 ## Re-exporting the series after new work
 
