@@ -66,6 +66,10 @@ bash scripts/build.sh
 CHROMIUM_BUILD_OUT=/path/to/chromium/src/out/Weles bash scripts/release.sh
 ```
 
+The authenticated `gh` actor must appear in the repository's comma-separated
+`WELES_RELEASE_APPROVERS` variable; publication fails before packaging
+otherwise.
+
 The publisher creates a prerelease candidate named
 `candidate-chromium-<upstream-version>-weles.N-<revision>`. The release workflow
 verifies its declared digest and source revision, then emits GitHub artifact
