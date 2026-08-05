@@ -1,0 +1,40 @@
+name: Attest Chromium candidate
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  attest:
+    if: github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download and bind declared candidate bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          TARGET: ${{ github.event.release.target_commitish }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern release-metadata.json
+          jq --exit-status --arg tag "$TAG" --arg target "$TARGET" '
+            .schema == "weles.browser-candidate.v1"
+            and .engine == "chromium"
+            and .candidateTag == $tag
+            and .sourceRevision == $target
+            and .status == "candidate"
+          ' release-metadata.json >/dev/null
+          artifact=$(jq --exit-status --raw-output '.artifact' release-metadata.json)
+          expected=$(jq --exit-status --raw-output '.artifactSha256' release-metadata.json)
+          printf '%s' "$artifact" | grep -Eq '^weles-chromium-[A-Za-z0-9._-]+\.tar\.gz$'
+          printf '%s' "$expected" | grep -Eq '^[0-9a-f]{64}$'
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$artifact"
+          printf '%s  %s\n' "$expected" "$artifact" | sha256sum --check --strict
+          printf 'ARTIFACT=%s\n' "$artifact" >> "$GITHUB_ENV"
+      - uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be # v2
+        with:
+          subject-path: ${{ env.ARTIFACT }}
