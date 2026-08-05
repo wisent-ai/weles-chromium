@@ -25,6 +25,10 @@ if ! printf '%s\n' "$APPROVERS" | tr ',' '\n' \
   echo "ERROR: ${ACTOR:-current GitHub actor} is not an allowlisted Weles release operator" >&2
   exit 1
 fi
+if ! git -C "$REPO_ROOT" diff --quiet || ! git -C "$REPO_ROOT" diff --cached --quiet; then
+  echo "ERROR: commit tracked Chromium release inputs before publishing" >&2
+  exit 1
+fi
 
 FULLVER="$("$BIN" --version | awk '{print $NF}')"
 if [[ -z "$FULLVER" ]]; then echo "ERROR: could not read Chromium version" >&2; exit 1; fi

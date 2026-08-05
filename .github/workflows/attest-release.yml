@@ -4,6 +4,10 @@ on:
   release:
     types: [published]
 
+concurrency:
+  group: weles-chromium-candidate
+  cancel-in-progress: false
+
 jobs:
   attest:
     if: github.event.release.prerelease
