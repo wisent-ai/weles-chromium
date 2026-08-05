@@ -13,6 +13,20 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - name: Require allowlisted release operator
+        env:
+          ACTOR: ${{ github.actor }}
+          APPROVERS: ${{ vars.WELES_RELEASE_APPROVERS }}
+        run: |
+          test -n "$APPROVERS" || {
+            echo "WELES_RELEASE_APPROVERS repository variable is empty" >&2
+            exit 1
+          }
+          printf '%s\n' "$APPROVERS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+            | grep -Fqx "$ACTOR" || {
+              echo "$ACTOR is not an allowlisted Weles release operator" >&2
+              exit 1
+            }
       - name: Download and bind declared candidate bytes
         env:
           GH_TOKEN: ${{ github.token }}
