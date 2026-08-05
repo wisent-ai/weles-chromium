@@ -66,10 +66,16 @@ bash scripts/build.sh
 CHROMIUM_BUILD_OUT=/path/to/chromium/src/out/Weles bash scripts/release.sh
 ```
 
-The publisher creates an immutable
-`chromium-<upstream-version>-weles.N` release. After publication, update the
-`WELES_CHROMIUM_RELEASE` pin in the Weles repository deliberately; this
-repository never commits into a consumer repository.
+The authenticated `gh` actor must appear in the repository's comma-separated
+`WELES_RELEASE_APPROVERS` variable. Tracked release inputs must match `HEAD`;
+publication fails before packaging otherwise.
+
+The publisher creates a prerelease candidate named
+`candidate-chromium-<upstream-version>-weles.N-<revision>`. The release workflow
+verifies its declared digest and source revision, then uploads a portable Sigstore
+bundle for those exact bytes. Production promotion reuses the candidate archive
+only after the Weles evidence gate approves its digest; this repository never
+commits into a consumer repository.
 
 ## Re-exporting the series after new work
 

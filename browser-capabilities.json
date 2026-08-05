@@ -1,0 +1,25 @@
+{
+  "schema": "weles.browser-capabilities.v1",
+  "engine": "chromium",
+  "upstreamVersion": "147.0.7727.108",
+  "forkPoint": "e74a8f5bfafeb",
+  "activation": {
+    "kind": "command-line-json",
+    "name": "--weles-fingerprint"
+  },
+  "capabilities": [
+    "navigator-identity",
+    "screen-geometry",
+    "webgl-vendor-renderer",
+    "canvas-determinism",
+    "webaudio-determinism",
+    "webrtc-ice-address",
+    "client-hints",
+    "locale",
+    "proxy-socket-hardening",
+    "cdp-input-timestamps",
+    "cdp-pointer-pressure",
+    "cdp-pointer-movement"
+  ],
+  "productionRequirement": "probierz-evidence-bound-to-artifact-sha256"
+}

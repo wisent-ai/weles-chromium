@@ -1,0 +1,70 @@
+name: Attest Chromium candidate
+
+on:
+  release:
+    types: [published]
+
+concurrency:
+  group: weles-chromium-candidate
+  cancel-in-progress: false
+
+jobs:
+  attest:
+    if: github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - name: Require allowlisted release operator
+        env:
+          ACTOR: ${{ github.actor }}
+          APPROVERS: ${{ vars.WELES_RELEASE_APPROVERS }}
+        run: |
+          test -n "$APPROVERS" || {
+            echo "WELES_RELEASE_APPROVERS repository variable is empty" >&2
+            exit 1
+          }
+          printf '%s\n' "$APPROVERS" | tr ',' '\n' | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' \
+            | grep -Fqx "$ACTOR" || {
+              echo "$ACTOR is not an allowlisted Weles release operator" >&2
+              exit 1
+            }
+      - name: Download and bind declared candidate bytes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+          TARGET: ${{ github.event.release.target_commitish }}
+        run: |
+          set -euo pipefail
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern release-metadata.json
+          jq --exit-status --arg tag "$TAG" --arg target "$TARGET" '
+            .schema == "weles.browser-candidate.v1"
+            and .engine == "chromium"
+            and .candidateTag == $tag
+            and .sourceRevision == $target
+            and .status == "candidate"
+          ' release-metadata.json >/dev/null
+          artifact=$(jq --exit-status --raw-output '.artifact' release-metadata.json)
+          expected=$(jq --exit-status --raw-output '.artifactSha256' release-metadata.json)
+          printf '%s' "$artifact" | grep -Eq '^weles-chromium-[A-Za-z0-9._-]+\.tar\.gz$'
+          printf '%s' "$expected" | grep -Eq '^[0-9a-f]{64}$'
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --pattern "$artifact"
+          printf '%s  %s\n' "$expected" "$artifact" | sha256sum --check --strict
+          printf 'ARTIFACT=%s\n' "$artifact" >> "$GITHUB_ENV"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.2
+      - name: Sign portable Chromium provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          cosign attest-blob --yes \
+            --predicate release-metadata.json \
+            --type https://weles.wisent.com/attestations/browser-candidate/v1 \
+            --bundle "$ARTIFACT.sigstore.json" \
+            "$ARTIFACT"
+          gh release upload "$TAG" "$ARTIFACT.sigstore.json" \
+            --repo "$GITHUB_REPOSITORY" --clobber
