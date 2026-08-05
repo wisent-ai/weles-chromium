@@ -43,7 +43,7 @@ ASSET="weles-chromium-${VERSION}-${PLATFORM}.tar.gz"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
-tar -czf "$TMP/$ASSET" -C "$BUILD_OUT" "$APP"
+tar -chzf "$TMP/$ASSET" -C "$BUILD_OUT" "$APP"
 if command -v shasum >/dev/null 2>&1; then
   shasum -a 256 "$TMP/$ASSET" > "$TMP/$ASSET.sha256"
 else
