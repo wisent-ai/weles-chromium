@@ -72,10 +72,10 @@ publication fails before packaging otherwise.
 
 The publisher creates a prerelease candidate named
 `candidate-chromium-<upstream-version>-weles.N-<revision>`. The release workflow
-verifies its declared digest and source revision, then emits GitHub artifact
-provenance for those exact bytes. Production promotion reuses the candidate
-archive only after the Weles evidence gate approves its digest; this repository
-never commits into a consumer repository.
+verifies its declared digest and source revision, then uploads a portable Sigstore
+bundle for those exact bytes. Production promotion reuses the candidate archive
+only after the Weles evidence gate approves its digest; this repository never
+commits into a consumer repository.
 
 ## Re-exporting the series after new work
 
