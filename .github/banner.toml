@@ -1,0 +1,15 @@
+[automation]
+managed = true
+source_fingerprint = "50a6022231ab06bd"
+category = "general"
+
+[banner]
+title = "Weles Chromium. Built for what comes next."
+description = "weles-patched Chromium — fingerprint defense C++ patch series (parallel to wisent-ai/weles-firefox). Binaries on wisent-ai/weles."
+product = "Wisent"
+url = "wisent.ai"
+theme = "dark"
+layout = "signal-left"
+art_seed = "weles-chromium"
+width = 1584
+height = 396
