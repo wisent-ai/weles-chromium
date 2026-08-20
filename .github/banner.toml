@@ -1,13 +1,13 @@
 [automation]
 managed = true
-source_fingerprint = "50a6022231ab06bd"
+source_fingerprint = "1520e25f55624a08"
 category = "general"
 
 [banner]
 title = "Weles Chromium. Built for what comes next."
-description = "weles-patched Chromium — fingerprint defense C++ patch series (parallel to wisent-ai/weles-firefox). Binaries on wisent-ai/weles."
+description = "Patches for Chromium for the Weles AI Undetectable Browser Use Ecosystem. Published Chromium Artifact for Browser Use and Instructions How to Cook It."
 product = "Wisent"
-url = "wisent.ai"
+url = "wisent.com"
 theme = "dark"
 layout = "signal-left"
 art_seed = "weles-chromium"
