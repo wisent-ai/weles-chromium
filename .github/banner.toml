@@ -1,11 +1,13 @@
 [automation]
 managed = true
-source_fingerprint = "1520e25f55624a08"
+source_fingerprint = "effa0829bbe2d9aa"
 category = "general"
+copy_status = "missing"
+approved_in = ""
 
 [banner]
-title = "Weles Chromium. Built for what comes next."
-description = "Patches for Chromium for the Weles AI Undetectable Browser Use Ecosystem. Published Chromium Artifact for Browser Use and Instructions How to Cook It."
+title = "Weles Chromium"
+description = ""
 product = "Wisent"
 url = "wisent.com"
 theme = "dark"
