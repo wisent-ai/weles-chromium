@@ -2,3 +2,12 @@
 # from .github/banner.toml and replaced whole on every run, so a repository
 # audit reads it as generated output instead of asking somebody to split it.
 assets/readme-banner.svg
+#
+# The patch series this repository exists to carry. Each file is the output of
+# git format-patch against the upstream engine and is read back by git am in
+# apply.sh, in the order its number gives. A patch cannot be split: its hunk
+# headers count lines, so half a patch applies to nothing. The folder is the
+# series itself, and moving files into sub-folders would break the sequence
+# its reader walks.
+patches
+patches/
