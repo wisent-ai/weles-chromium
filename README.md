@@ -64,27 +64,27 @@ hunks; fix any `.rej`, `git add`, `git am --continue`.
 
 ## Building and releasing
 
-Builds use an external patched Chromium checkout with an `out/Weles` GN config.
-The release script reads the version from the built browser and publishes the
-platform archive plus checksum to `wisent-ai/weles-chromium`:
+A release is a Stado release of product `weles-chromium`, declared in
+`.wisent-release.json`; no script here publishes anything by hand:
 
 ```bash
-bash scripts/build.sh
-
-# Publish an existing build without rebuilding:
-CHROMIUM_BUILD_OUT=/path/to/chromium/src/out/Weles bash scripts/release.sh
+stado release submit --source /path/to/weles-chromium --commit <pushed commit>
 ```
 
-The authenticated `gh` actor must appear in the repository's comma-separated
-`WELES_RELEASE_APPROVERS` variable. Tracked release inputs must match `HEAD`;
-publication fails before packaging otherwise.
+- **Version:** `upstreamVersion` in `browser-capabilities.json`, so the
+  coordinate is `stado://releases/weles-chromium/<upstreamVersion>/darwin-arm64/release.tar.gz`.
+- **Quality (`fmt`):** `release/quality.sh` parses every patch under `patches/`
+  the way `git am` reads it and refuses an empty series.
+- **Build:** `release/build.sh` runs on a darwin-arm64 builder that declares
+  `WELES_CHROMIUM_SRC`, its own `chromium/src` checkout (the upstream tree is
+  too large for any release to carry). It checks out the `forkPoint` of
+  `browser-capabilities.json`, applies the series with `git am --three-way`,
+  builds `out/Weles chrome` and stages `Chromium.app`. A missing
+  `WELES_CHROMIUM_SRC`, a checkout without the fork point, or a build without
+  `Chromium.app` is refused naming it.
 
-The publisher creates a prerelease candidate named
-`candidate-chromium-<upstream-version>-weles.N-<revision>`. The release workflow
-verifies its declared digest and source revision, then uploads a portable Sigstore
-bundle for those exact bytes. Production promotion reuses the candidate archive
-only after the Weles evidence gate approves its digest; this repository never
-commits into a consumer repository.
+Still open: no builder declares `WELES_CHROMIUM_SRC` yet, and the manifest
+delivers to no host, so a Weles host installs the published archive itself.
 
 ## Re-exporting the series after new work
 

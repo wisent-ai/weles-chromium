@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "product": "weles-chromium",
+  "releases": true,
+  "version_source": {
+    "kind": "json",
+    "path": "browser-capabilities.json",
+    "pointer": "/upstreamVersion"
+  },
+  "inputs": {},
+  "platforms": {
+    "darwin-arm64": {
+      "quality": [
+        {
+          "name": "fmt",
+          "argv": ["bash", "release/quality.sh"]
+        }
+      ],
+      "build": {
+        "argv": ["bash", "release/build.sh"]
+      },
+      "stage": {
+        "stage/Chromium.app": "Chromium.app"
+      },
+      "runner_platform": "darwin-arm64"
+    }
+  },
+  "promotion": {
+    "channels": ["candidate", "stable"],
+    "reconcile": false
+  },
+  "deliveries": []
+}
