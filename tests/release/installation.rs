@@ -133,6 +133,35 @@ fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("archive checksum mismatch"));
     assert_eq!(fs::read(directory.join(".weles-release")).unwrap(), receipt);
+    let lock = directory
+        .parent()
+        .unwrap()
+        .join(format!(".install-{version}.lock"));
+    fs::create_dir(&lock).expect("reserve the isolated destination for another installer");
+    let locked = run.install(None);
+    assert!(!locked.status.success());
+    assert!(String::from_utf8_lossy(&locked.stderr).contains("another installation owns"));
+    assert!(
+        lock.is_dir(),
+        "refused installer removed another operation's lock"
+    );
+    assert_eq!(fs::read(directory.join(".weles-release")).unwrap(), receipt);
+    fs::remove_dir(&lock).expect("release test-owned reservation");
+    let conflicting_receipt =
+        format!("release_uri={uri}\narchive_sha256={other_digest}\nplatform={platform}\n");
+    fs::write(directory.join(".weles-release"), &conflicting_receipt).unwrap();
+    let conflict = run.install(None);
+    assert!(!conflict.status.success());
+    assert!(String::from_utf8_lossy(&conflict.stderr).contains("installed receipt conflicts"));
+    assert_eq!(
+        fs::read(directory.join(".weles-release")).unwrap(),
+        conflicting_receipt.as_bytes()
+    );
+    assert!(
+        !lock.exists(),
+        "failed installation retained its own reservation"
+    );
+    fs::write(directory.join(".weles-release"), &receipt).unwrap();
     let after = run.command(
         "executable after refusal",
         Command::new("shasum").args(["-a", "256"]).arg(&executable),

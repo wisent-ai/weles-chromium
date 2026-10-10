@@ -119,9 +119,11 @@ rustc --edition 2021 --test tests/release/installation.rs -o .build/installation
 
 The journey creates an isolated installation home under `.build`, runs the real
 installer, reads the installed browser's version and receipt, repeats delivery,
-and proves a mismatched archive digest leaves the receipt and executable
-unchanged. Reports retain source revision, commands, exit statuses and observed
-digests under `.build/release-installation`; successful runs remove only their
+and proves mismatched archive digests, conflicting installed receipts and a
+reservation owned by another installer are refused without changing installed
+executable bytes or deleting another operation's lock. Reports retain source
+revision, commands, exit statuses and observed digests under
+`.build/release-installation`; successful runs remove only their
 isolated installation. Browser navigation remains a separate Weles keeper/API
 journey; this test does not launch a browsing session or qualify a graphical
 surface.

@@ -42,6 +42,8 @@ verify() {
 }
 lock="$root/.install-$WISENT_VERSION.lock"
 mkdir "$lock" || refuse "another installation owns $lock; inspect that delivery before removing its lock"
+# Install the trap only after this process owns the lock. Refusal above must
+# never remove another delivery's reservation.
 staging=''
 cleanup() {
   if [ -n "$staging" ]; then rm -rf -- "$staging"; fi
@@ -66,6 +68,7 @@ verify "$staging"
 [ ! -e "$destination" ] && [ ! -L "$destination" ] || refuse "destination appeared during delivery: $destination"
 mv -n "$staging" "$destination"
 [ ! -e "$staging" ] || refuse "destination changed during publication: $destination"
+# Publication transferred ownership; cleanup must not remove installed bytes.
 staging=''
 verify "$destination"
 printf 'Installed verified Chromium release: %s\n' "$destination"
