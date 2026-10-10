@@ -7,3 +7,4 @@ out/
 *.tar.gz.sha256
 depot_tools/
 .DS_Store
+.build/

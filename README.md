@@ -52,15 +52,17 @@ drop-in upstream chrome. The JSON schema mirrors `weles.fingerprint.toCppConfig`
 ## Applying
 
 ```bash
-# Onto a fresh upstream checkout pinned at the fork point:
+# Requires Git, jq and an existing upstream Chromium checkout:
 bash apply.sh /path/to/chromium/src
-# or by hand, from chromium/src:
-git checkout -b weles-147 e74a8f5bfafeb
-git am /path/to/weles-chromium/patches/0*.patch
 ```
 
-If context has shifted on a newer upstream, `git am -3` (3-way) resolves most
-hunks; fix any `.rej`, `git add`, `git am --continue`.
+The source must be the exact checkout root, with no tracked or untracked work
+and no unfinished merge, rebase, cherry-pick, revert or patch application.
+Admission refuses before changing source and names the observed state.
+The script reads `forkPoint` from `browser-capabilities.json`, uses a non-forced
+detached checkout and applies the series once with `git am --three-way`.
+Existing branches are not reset. A failed patch application retains Git's
+diagnostics and operation state; no automatic abort or second attempt hides it.
 
 ## Building and releasing
 
@@ -77,20 +79,42 @@ stado release submit --source /path/to/weles-chromium --commit <pushed commit>
   the way `git am` reads it and refuses an empty series.
 - **Build:** `release/build.sh` runs on a darwin-arm64 builder that declares
   `WELES_CHROMIUM_SRC`, its own `chromium/src` checkout (the upstream tree is
-  too large for any release to carry). It checks out the `forkPoint` of
-  `browser-capabilities.json`, applies the series with `git am --three-way`,
-  builds `out/Weles chrome` and stages `Chromium.app`. A missing
-  `WELES_CHROMIUM_SRC`, a checkout without the fork point, or a build without
-  `Chromium.app` is refused naming it.
+  too large for any release to carry). It invokes the same `apply.sh` admission
+  and patch operation, then builds `out/Weles chrome` and stages `Chromium.app`.
+  A missing `WELES_CHROMIUM_SRC`, dirty or unfinished source, an unavailable
+  fork point, or a build without `Chromium.app` is refused naming its cause.
 
 Still open: no builder declares `WELES_CHROMIUM_SRC` yet, and the manifest
 delivers to no host, so a Weles host installs the published archive itself.
 
+### Source admission qualification
+
+`tests/release/source_admission.rs` runs the real `apply.sh` against an explicitly
+supplied dedicated Chromium checkout; it does not create a substitute repository.
+Run from this product checkout with `WELES_CHROMIUM_TEST_SOURCE` naming that source:
+
+```bash
+mkdir -p .build
+rustc --edition 2021 --test tests/release/source_admission.rs -o .build/source-admission-test
+.build/source-admission-test --ignored --exact applies_real_patch_series
+```
+
+The successful flow verifies the declared fork ancestry, the complete patch
+count, unchanged existing refs and a clean detached checkout. It leaves the
+applied source available for the release build. Run `preserves_dirty_source`,
+`preserves_unfinished_operation` and `refuses_nested_source` separately with
+the corresponding real source state. Each refusal must name its cause and leave
+HEAD, refs, tracked changes and untracked file contents unchanged.
+Reports retain the product revision, input Git object hashes, command arguments,
+exit statuses and observed state under `.build/source-admission`.
+No browser compilation, installation or graphical qualification is implied.
+
 ## Re-exporting the series after new work
 
 ```bash
-# in chromium-build/src, after committing onto weles-147:
-git format-patch <fork-point>..weles-147 -o /path/to/weles-chromium/patches --no-signature
+# In the admitted Chromium source after applying and committing changes:
+git format-patch <fork-point>..HEAD -o /path/to/weles-chromium/patches --no-signature
 ```
 
-Then update the upstream version + fork point in this README and push.
+Then update the upstream version and fork point in `browser-capabilities.json`
+and push.
