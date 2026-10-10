@@ -3,6 +3,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs};
+mod source_state;
 
 #[derive(Debug)]
 enum Expectation {
@@ -20,6 +21,7 @@ struct Snapshot {
     worktree_diff: String,
     index_diff: String,
     untracked: Vec<String>,
+    operations: Vec<(PathBuf, source_state::State)>,
 }
 
 struct Run {
@@ -73,6 +75,10 @@ impl Run {
                 ));
             }
         }
+        let git_dir = PathBuf::from(
+            self.git(source, &["rev-parse", "--absolute-git-dir"])?
+                .trim(),
+        );
         Ok(Snapshot {
             head: self.git(source, &["rev-parse", "HEAD"])?,
             refs: self.git(source, &["show-ref"])?,
@@ -83,6 +89,7 @@ impl Run {
             worktree_diff: self.git(source, &["diff", "--binary"])?,
             index_diff: self.git(source, &["diff", "--cached", "--binary"])?,
             untracked,
+            operations: source_state::capture(&git_dir)?,
         })
     }
 
@@ -115,6 +122,7 @@ impl Run {
             return Err("Chromium test source must not contain the product checkout".into());
         }
         let before = self.snapshot(source)?;
+        self.report.push_str(&format!("before-state: {before:?}\n"));
         let apply = repo.join("apply.sh");
         let path = |path: &Path| {
             path.to_str()
@@ -123,6 +131,7 @@ impl Run {
         };
         let result = self.command(repo, "bash", &[&path(&apply)?, &path(source)?])?;
         let after = self.snapshot(source)?;
+        self.report.push_str(&format!("after-state: {after:?}\n"));
         let cause = match expected {
             Expectation::Applied => {
                 if !result.status.success() {

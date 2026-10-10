@@ -104,7 +104,8 @@ count, unchanged existing refs and a clean detached checkout. It leaves the
 applied source available for the release build. Run `preserves_dirty_source`,
 `preserves_unfinished_operation` and `refuses_nested_source` separately with
 the corresponding real source state. Each refusal must name its cause and leave
-HEAD, refs, tracked changes and untracked file contents unchanged.
+HEAD, refs, tracked changes, untracked file contents and unfinished Git operation
+files, directories and symlink targets unchanged.
 Reports retain the product revision, input Git object hashes, command arguments,
 exit statuses and observed state under `.build/source-admission`.
 No browser compilation, installation or graphical qualification is implied.
