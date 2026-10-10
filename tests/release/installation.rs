@@ -162,6 +162,13 @@ fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
         "failed installation retained its own reservation"
     );
     fs::write(directory.join(".weles-release"), &receipt).unwrap();
+    let recovered = run.install(None);
+    assert!(
+        recovered.status.success(),
+        "delivery after a refused installation must succeed: {}",
+        String::from_utf8_lossy(&recovered.stderr)
+    );
+    assert_eq!(fs::read(directory.join(".weles-release")).unwrap(), receipt);
     let after = run.command(
         "executable after refusal",
         Command::new("shasum").args(["-a", "256"]).arg(&executable),

@@ -121,7 +121,9 @@ The journey creates an isolated installation home under `.build`, runs the real
 installer, reads the installed browser's version and receipt, repeats delivery,
 and proves mismatched archive digests, conflicting installed receipts and a
 reservation owned by another installer are refused without changing installed
-executable bytes or deleting another operation's lock. Reports retain source
+executable bytes or deleting another operation's lock. After restoring the
+isolated receipt, it requires delivery to succeed again, proving that a refusal
+did not leave the destination reserved. Reports retain source
 revision, commands, exit statuses and observed digests under
 `.build/release-installation`; successful runs remove only their
 isolated installation. Browser navigation remains a separate Weles keeper/API
