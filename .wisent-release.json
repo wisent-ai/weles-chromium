@@ -29,5 +29,13 @@
     "channels": ["candidate", "stable"],
     "reconcile": false
   },
-  "deliveries": []
+  "deliveries": [
+    {
+      "name": "browser-runtime",
+      "platform": "darwin-arm64",
+      "argv": ["bash", "release/install.sh"],
+      "required": true,
+      "target": { "product": "weles-chromium" }
+    }
+  ]
 }

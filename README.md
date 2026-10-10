@@ -84,8 +84,47 @@ stado release submit --source /path/to/weles-chromium --commit <pushed commit>
   A missing `WELES_CHROMIUM_SRC`, dirty or unfinished source, an unavailable
   fork point, or a build without `Chromium.app` is refused naming its cause.
 
-Still open: no builder declares `WELES_CHROMIUM_SRC` yet, and the manifest
-delivers to no host, so a Weles host installs the published archive itself.
+The required `browser-runtime` delivery installs the verified archive on the
+registry-declared destinations for `weles-chromium`. Declare and inspect those
+destinations with `stado release destinations set weles-chromium --target <host>`
+and `stado release destinations show weles-chromium --json`; the Stado Desktop
+Releases screen exposes the same destination and delivery operations.
+`stado release status weles-chromium --json` retains each target's result.
+
+`release/install.sh` consumes Stado's verified archive path, URI, checksum,
+product, version and platform. It installs under
+`$HOME/.local/share/weles-chromium/<version>` and writes `.weles-release` only
+after archive verification and executable-layout admission. Repeated delivery
+accepts only an installed executable with the matching receipt. A conflicting
+receipt, platform, coordinate, checksum, destination or concurrent installation
+is refused without replacing an installed release. The worker must select that
+exact version and digest for launch; installation does not select a deployment
+or prove browser execution. Custom installation roots are refused by managed
+delivery rather than silently installed somewhere the worker does not read.
+
+The builder must still declare `WELES_CHROMIUM_SRC` and provide its real
+upstream source. A delivery declaration does not provide that build input.
+
+### Installation qualification
+
+On the dedicated darwin-arm64 qualification host, provide an actual qualified
+release archive and the matching `WISENT_RELEASE_ARCHIVE`, `WISENT_RELEASE_URI`,
+`WISENT_RELEASE_SHA256`, `WISENT_PRODUCT`, `WISENT_VERSION` and `WISENT_PLATFORM`
+delivery inputs. From the canonical product checkout:
+
+```bash
+rustc --edition 2021 --test tests/release/installation.rs -o .build/installation-test
+.build/installation-test --ignored --exact installs_real_bundle_and_refuses_conflicting_archive_digest
+```
+
+The journey creates an isolated installation home under `.build`, runs the real
+installer, reads the installed browser's version and receipt, repeats delivery,
+and proves a mismatched archive digest leaves the receipt and executable
+unchanged. Reports retain source revision, commands, exit statuses and observed
+digests under `.build/release-installation`; successful runs remove only their
+isolated installation. Browser navigation remains a separate Weles keeper/API
+journey; this test does not launch a browsing session or qualify a graphical
+surface.
 
 ### Source admission qualification
 
