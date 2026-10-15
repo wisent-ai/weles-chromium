@@ -74,17 +74,30 @@ stado release submit --source /path/to/weles-chromium --commit <pushed commit>
 ```
 
 - **Version:** `upstreamVersion` in `browser-capabilities.json`, so the
-  coordinate is `stado://releases/weles-chromium/<upstreamVersion>/darwin-arm64/release.tar.gz`.
+  coordinate is `stado://releases/weles-chromium/<upstreamVersion>/<platform>/release.tar.gz`,
+  with `platform` equal to `darwin-arm64` or `linux-amd64`.
 - **Quality (`fmt`):** `release/quality.sh` parses every patch under `patches/`
   the way `git am` reads it and refuses an empty series.
-- **Build:** `release/build.sh` runs on a darwin-arm64 builder that declares
-  `WELES_CHROMIUM_SRC`, its own `chromium/src` checkout (the upstream tree is
-  too large for any release to carry). It invokes the same `apply.sh` admission
-  and patch operation, then builds `out/Weles chrome` and stages `Chromium.app`.
-  A missing `WELES_CHROMIUM_SRC`, dirty or unfinished source, an unavailable
-  fork point, or a build without `Chromium.app` is refused naming its cause.
+- **Build:** `release/build.sh` requires a native builder matching
+  `WISENT_PLATFORM` and a declared `WELES_CHROMIUM_SRC`, its own
+  `chromium/src` checkout with a configured `out/Weles` build directory.
+  It invokes the same `apply.sh` admission and patch operation.
+  Darwin builds `chrome` and stages `Chromium.app`. Linux builds upstream
+  `chrome/installer/linux:stable_deb`, reads its exact output with `gn desc`,
+  extracts it with `dpkg-deb`, and stages the complete upstream-declared
+  installation directory as `chromium`, including resources and libraries.
+  Linux therefore requires GN, dpkg-deb and upstream Debian packaging
+  dependencies, with `is_component_build=false` and unbranded Chromium.
+  A mismatched host, missing input, dirty or unfinished source, unavailable
+  fork point, failed packaging tool or missing executable retains its cause.
+  Tools, the generated `out/Weles/build.ninja` graph and unused staging and
+  Linux package-extraction destinations are admitted before any patch application.
+  A missing compiler entrypoint or packaging tool cannot leave the source newly
+  patched. Existing output trees and dangling destination symlinks are refused
+  rather than silently contributing bytes to another release.
 
-The required `browser-runtime` delivery installs the verified archive on the
+The required `browser-runtime` (Darwin) and `browser-runtime-linux` (Linux)
+deliveries install the verified native archive on the
 registry-declared destinations for `weles-chromium`. Declare and inspect those
 destinations with `stado release destinations set weles-chromium --target <host>`
 and `stado release destinations show weles-chromium --json`; the Stado Desktop
@@ -97,28 +110,44 @@ product, version and platform. It installs under
 after archive verification and executable-layout admission. Repeated delivery
 accepts only an installed executable with the matching receipt. A conflicting
 receipt, platform, coordinate, checksum, destination or concurrent installation
-is refused without replacing an installed release. The worker must select that
-exact version and digest for launch; installation does not select a deployment
-or prove browser execution. Custom installation roots are refused by managed
-delivery rather than silently installed somewhere the worker does not read.
+is refused without replacing an installed release. After the installed release
+verifies, the delivery records it as the host's selection in
+`$HOME/.local/share/weles-chromium/selected` (`version=` and `sha256=` lines,
+replaced whole by a rename). Weles's browser finder launches the release that
+record names, unless the deployment pins one through both
+`WELES_CHROMIUM_RELEASE_VERSION` and `WELES_CHROMIUM_RELEASE_SHA256`; with
+neither, every browser run is refused naming the variables and the record.
+The finder also requires the named release's executable and a receipt matching
+its coordinate and digest. Delivery does not prove browser
+execution. Custom installation roots are refused by managed delivery rather
+than silently installed somewhere the worker does not read.
+Native delivery accepts Darwin arm64 with
+`Chromium.app/Contents/MacOS/Chromium`, or Linux x86_64 with `chromium/chrome`.
+A platform/host mismatch is refused before extraction. Both hosts need Bash,
+tar, shasum and the standard filesystem utilities used by the installer.
 
 The builder must still declare `WELES_CHROMIUM_SRC` and provide its real
 upstream source. A delivery declaration does not provide that build input.
 
 ### Installation qualification
 
-On the dedicated darwin-arm64 qualification host, provide an actual qualified
-release archive and the matching `WISENT_RELEASE_ARCHIVE`, `WISENT_RELEASE_URI`,
-`WISENT_RELEASE_SHA256`, `WISENT_PRODUCT`, `WISENT_VERSION` and `WISENT_PLATFORM`
-delivery inputs. From the canonical product checkout:
+On each dedicated darwin-arm64 or linux-amd64 qualification host, provide an
+actual qualified archive for that host and the matching `WISENT_RELEASE_ARCHIVE`,
+`WISENT_RELEASE_URI`, `WISENT_RELEASE_SHA256`, `WISENT_PRODUCT`, `WISENT_VERSION`
+and `WISENT_PLATFORM` delivery inputs. Declare the exact committed product candidate
+in `WELES_CHROMIUM_TEST_SOURCE_REVISION`; a different HEAD or uncommitted product
+work is refused before installation. From the canonical product checkout:
 
 ```bash
 rustc --edition 2021 --test tests/release/installation.rs -o .build/installation-test
 .build/installation-test --ignored --exact installs_real_bundle_and_refuses_conflicting_archive_digest
 ```
 
-The journey creates an isolated installation home under `.build`, runs the real
-installer, reads the installed browser's version and receipt, repeats delivery,
+The journey first refuses a foreign platform without creating an installation.
+It creates an isolated installation home under `.build`, runs the real
+installer, checks the installed browser's version against the declared
+`browser-capabilities.json` upstream version and its receipt against the independent
+product release coordinate, repeats delivery,
 and proves mismatched archive digests, conflicting installed receipts and a
 reservation owned by another installer are refused without changing installed
 executable bytes or deleting another operation's lock. After restoring the
@@ -134,7 +163,11 @@ surface.
 
 `tests/release/source_admission.rs` runs the real `apply.sh` against an explicitly
 supplied dedicated Chromium checkout; it does not create a substitute repository.
-Run from this product checkout with `WELES_CHROMIUM_TEST_SOURCE` naming that source:
+Run from this product checkout with `WELES_CHROMIUM_TEST_SOURCE` naming that source
+and `WELES_CHROMIUM_TEST_SOURCE_REVISION` declaring the exact committed product
+revision. A different HEAD or any uncommitted product work is refused before
+the Chromium source is changed. Dirty and unfinished Chromium sources remain
+valid inputs for their corresponding refusal cases.
 
 ```bash
 mkdir -p .build
@@ -149,9 +182,23 @@ applied source available for the release build. Run `preserves_dirty_source`,
 the corresponding real source state. Each refusal must name its cause and leave
 HEAD, refs, tracked changes, untracked file contents and unfinished Git operation
 files, directories and symlink targets unchanged.
-Reports retain the product revision, input Git object hashes, command arguments,
-exit statuses and observed state under `.build/source-admission`.
+Reports retain the declared and observed product revision, source and journey
+Git object hashes, command arguments, exit statuses and observed state under
+`.build/source-admission`.
 No browser compilation, installation or graphical qualification is implied.
+
+`preserves_unconfigured_build_source` exercises the actual release producer
+against a real source without `out/Weles/build.ninja`, with `WISENT_PLATFORM`
+declaring the native platform and the documented build tools available.
+It requires the specific unconfigured-graph refusal and unchanged source
+state. It does not create a substitute source tree or invoke compilation.
+
+`preserves_occupied_extraction_source` and `preserves_dangling_extraction_source`
+exercise the actual producer against a configured dedicated Linux source and its
+native packaging tools. Each creates only its own occupied extraction destination
+under the ignored report directory, invokes the producer, checks the named refusal
+and unchanged real checkout and extraction state, then removes that owned input.
+Neither case substitutes a source tree or compilation command.
 
 ## Re-exporting the series after new work
 

@@ -13,7 +13,8 @@
       "quality": [
         {
           "name": "fmt",
-          "argv": ["bash", "release/quality.sh"]
+          "argv": ["bash", "release/quality.sh"],
+          "kind": "format"
         }
       ],
       "build": {
@@ -23,6 +24,22 @@
         "stage/Chromium.app": "Chromium.app"
       },
       "runner_platform": "darwin-arm64"
+    },
+    "linux-amd64": {
+      "quality": [
+        {
+          "name": "fmt",
+          "argv": ["bash", "release/quality.sh"],
+          "kind": "format"
+        }
+      ],
+      "build": {
+        "argv": ["bash", "release/build.sh"]
+      },
+      "stage": {
+        "stage/chromium": "chromium"
+      },
+      "runner_platform": "linux-amd64"
     }
   },
   "promotion": {
@@ -33,6 +50,13 @@
     {
       "name": "browser-runtime",
       "platform": "darwin-arm64",
+      "argv": ["bash", "release/install.sh"],
+      "required": true,
+      "target": { "product": "weles-chromium" }
+    },
+    {
+      "name": "browser-runtime-linux",
+      "platform": "linux-amd64",
       "argv": ["bash", "release/install.sh"],
       "required": true,
       "target": { "product": "weles-chromium" }

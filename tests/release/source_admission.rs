@@ -1,7 +1,6 @@
 //! Exercise the real patch entrypoint on an explicitly supplied Chromium checkout.
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
-use std::time::{SystemTime, UNIX_EPOCH};
 use std::{env, fs};
 mod source_state;
 
@@ -11,6 +10,9 @@ enum Expectation {
     Dirty,
     Unfinished,
     Nested,
+    BuildUnconfigured,
+    ExtractionOccupied,
+    ExtractionSymlink,
 }
 
 #[derive(Debug, PartialEq)]
@@ -98,22 +100,34 @@ impl Run {
         repo: &Path,
         source: &Path,
         expected: Expectation,
+        output: &Path,
     ) -> Result<(), String> {
-        self.git(repo, &["rev-parse", "HEAD"])?;
+        let declared = env::var("WELES_CHROMIUM_TEST_SOURCE_REVISION")
+            .map_err(|error| format!("WELES_CHROMIUM_TEST_SOURCE_REVISION is required: {error}"))?;
+        let observed = self.git(repo, &["rev-parse", "HEAD"])?;
+        self.report
+            .push_str(&format!("declared-source-revision: {declared}\n"));
+        if declared.trim().is_empty() || observed.trim() != declared {
+            return Err(format!(
+                "candidate revision mismatch: declared {declared:?}, observed {observed:?}"
+            ));
+        }
+        let status = self.git(repo, &["status", "--porcelain", "--untracked-files=all"])?;
+        if !status.is_empty() {
+            return Err(format!(
+                "commit the product candidate before qualification: {status}"
+            ));
+        }
         self.git(
             repo,
             &[
-                "diff",
-                "HEAD",
-                "--",
+                "hash-object",
                 "apply.sh",
                 "browser-capabilities.json",
-                "patches",
+                "release/build.sh",
+                "tests/release/source_admission.rs",
+                "tests/release/source_state.rs",
             ],
-        )?;
-        self.git(
-            repo,
-            &["hash-object", "apply.sh", "browser-capabilities.json"],
         )?;
         let root = PathBuf::from(self.git(source, &["rev-parse", "--show-toplevel"])?.trim())
             .canonicalize()
@@ -129,7 +143,16 @@ impl Run {
                 .map(str::to_owned)
                 .ok_or_else(|| format!("non-UTF-8 test path {}", path.display()))
         };
-        let result = self.command(repo, "bash", &[&path(&apply)?, &path(source)?])?;
+        let result = if matches!(
+            expected,
+            Expectation::BuildUnconfigured
+                | Expectation::ExtractionOccupied
+                | Expectation::ExtractionSymlink
+        ) {
+            source_state::build_refusal(self, repo, source, output, &expected)?
+        } else {
+            self.command(repo, "bash", &[&path(&apply)?, &path(source)?])?
+        };
         let after = self.snapshot(source)?;
         self.report.push_str(&format!("after-state: {after:?}\n"));
         let cause = match expected {
@@ -188,6 +211,10 @@ impl Run {
             Expectation::Dirty => "uncommitted work",
             Expectation::Unfinished => "unfinished Git operation",
             Expectation::Nested => "must name the checkout root",
+            Expectation::BuildUnconfigured => "no configured build graph",
+            Expectation::ExtractionOccupied | Expectation::ExtractionSymlink => {
+                "package extraction directory already exists"
+            }
         };
         if result.status.success() || !String::from_utf8_lossy(&result.stderr).contains(cause) {
             return Err(format!(
@@ -201,53 +228,44 @@ impl Run {
     }
 }
 
-fn qualify(expected: Expectation) {
-    let source =
-        env::var("WELES_CHROMIUM_TEST_SOURCE").expect("WELES_CHROMIUM_TEST_SOURCE is required");
-    let source = PathBuf::from(source)
-        .canonicalize()
-        .expect("real Chromium source");
-    let repo = env::current_dir()
-        .expect("product checkout")
-        .canonicalize()
-        .expect("product root");
-    let stamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("clock")
-        .as_nanos();
-    let output = repo
-        .join(".build/source-admission")
-        .join(format!("{}-{stamp}", std::process::id()));
-    fs::create_dir_all(&output).expect("retained report directory");
-    let mut run = Run {
-        report: format!("source: {}\nexpectation: {expected:?}\n", source.display()),
-    };
-    let result = run.exercise(&repo, &source, expected);
-    run.report.push_str(&format!("result: {result:?}\n"));
-    fs::write(output.join("report.txt"), run.report).expect("retain command outcomes");
-    result.expect("real Chromium source admission; inspect retained report");
-}
-
 #[test]
 #[ignore = "Requires a clean dedicated Chromium source holding the declared fork point"]
 fn applies_real_patch_series() {
-    qualify(Expectation::Applied);
+    source_state::qualify(Expectation::Applied);
 }
 
 #[test]
 #[ignore = "Requires a dedicated Chromium source with real uncommitted work"]
 fn preserves_dirty_source() {
-    qualify(Expectation::Dirty);
+    source_state::qualify(Expectation::Dirty);
 }
 
 #[test]
 #[ignore = "Requires a dedicated Chromium source with an unfinished Git operation"]
 fn preserves_unfinished_operation() {
-    qualify(Expectation::Unfinished);
+    source_state::qualify(Expectation::Unfinished);
 }
 
 #[test]
 #[ignore = "Requires a directory nested inside the dedicated Chromium source"]
 fn refuses_nested_source() {
-    qualify(Expectation::Nested);
+    source_state::qualify(Expectation::Nested);
+}
+
+#[test]
+#[ignore = "Requires an unconfigured real Chromium source and native WISENT_PLATFORM"]
+fn preserves_unconfigured_build_source() {
+    source_state::qualify(Expectation::BuildUnconfigured);
+}
+
+#[test]
+#[ignore = "Requires configured dedicated Linux Chromium source and native packaging tools"]
+fn preserves_occupied_extraction_source() {
+    source_state::qualify(Expectation::ExtractionOccupied);
+}
+
+#[test]
+#[ignore = "Requires configured dedicated Linux Chromium source and native packaging tools"]
+fn preserves_dangling_extraction_source() {
+    source_state::qualify(Expectation::ExtractionSymlink);
 }

@@ -8,3 +8,6 @@ out/
 depot_tools/
 .DS_Store
 .build/
+# Cargo's output and lock for the release journeys' package.
+tests/release/target/
+tests/release/Cargo.lock

@@ -1,0 +1,21 @@
+# The real release journeys of weles-chromium: each test drives
+# release/install.sh or apply.sh, the delivery and patch endpoints Stado
+# runs, against a real archive or source tree, and keeps the operations it
+# ran. They use only the standard library. Built by Cargo
+# (`cargo test --manifest-path tests/release/Cargo.toml --test <name> --
+# --ignored`), a journey finds the product checkout two directories above
+# this package; built with rustc as the README shows, it runs from the
+# checkout.
+[package]
+name = "weles-chromium-release-journeys"
+edition = "2021"
+publish = false
+
+[[test]]
+name = "installation"
+path = "installation.rs"
+
+# source_state.rs is a module of this journey.
+[[test]]
+name = "source_admission"
+path = "source_admission.rs"

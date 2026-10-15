@@ -46,9 +46,16 @@ fn required(name: &str) -> String {
     value
 }
 #[test]
-#[ignore = "Requires the actual qualified darwin-arm64 Chromium release archive"]
+#[ignore = "Requires the actual qualified Chromium release archive on its matching dedicated host"]
 fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
-    let root = env::current_dir().expect("product checkout");
+    // Built by Cargo, the journeys' package is tests/release inside the
+    // product checkout; built by rustc as the README shows, the journey runs
+    // from the checkout itself.
+    let root = match option_env!("CARGO_MANIFEST_DIR") {
+        Some(package) => fs::canonicalize(PathBuf::from(package).join("../..")),
+        None => env::current_dir(),
+    }
+    .expect("product checkout");
     assert!(root.join("release/install.sh").is_file());
     let version = required("WISENT_VERSION");
     let platform = required("WISENT_PLATFORM");
@@ -58,7 +65,11 @@ fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
     let archive =
         fs::canonicalize(required("WISENT_RELEASE_ARCHIVE")).expect("real release archive");
     assert_eq!(product, "weles-chromium");
-    assert_eq!(platform, "darwin-arm64");
+    let executable_path = match platform.as_str() {
+        "darwin-arm64" => "Chromium.app/Contents/MacOS/Chromium",
+        "linux-amd64" => "chromium/chrome",
+        _ => panic!("unsupported release platform: {platform}"),
+    };
     assert_eq!(
         uri,
         format!("stado://releases/{product}/{version}/{platform}/release.tar.gz")
@@ -92,6 +103,54 @@ fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
             .args(["rev-parse", "HEAD"]),
     );
     assert!(revision.status.success());
+    let declared_revision = required("WELES_CHROMIUM_TEST_SOURCE_REVISION");
+    assert_eq!(
+        String::from_utf8(revision.stdout).unwrap().trim(),
+        declared_revision,
+        "qualify the declared product candidate"
+    );
+    let status = run.command(
+        "candidate cleanliness",
+        Command::new("git").current_dir(&root).args([
+            "status",
+            "--porcelain",
+            "--untracked-files=all",
+        ]),
+    );
+    assert!(status.status.success());
+    assert!(
+        status.stdout.is_empty(),
+        "commit the product candidate before qualification"
+    );
+    let upstream = run.command(
+        "declared upstream browser version",
+        Command::new("jq")
+            .args(["-er", ".upstreamVersion"])
+            .arg(root.join("browser-capabilities.json")),
+    );
+    assert!(upstream.status.success());
+    let upstream = String::from_utf8(upstream.stdout).unwrap();
+    assert!(
+        !upstream.trim().is_empty(),
+        "upstreamVersion must not be empty"
+    );
+    let foreign_platform = match platform.as_str() {
+        "darwin-arm64" => "linux-amd64",
+        "linux-amd64" => "darwin-arm64",
+        _ => unreachable!(),
+    };
+    let foreign = run.command(
+        "refuse a release for another host platform",
+        Command::new("bash")
+            .arg(root.join("release/install.sh"))
+            .env("HOME", &home)
+            .env_remove("WELES_CHROMIUM_DIR")
+            .env("WISENT_PLATFORM", foreign_platform),
+    );
+    assert!(!foreign.status.success());
+    let cause = String::from_utf8_lossy(&foreign.stderr);
+    assert!(cause.contains(foreign_platform) && cause.contains("cannot be installed on"));
+    assert!(!home.join(".local/share/weles-chromium").exists());
     let installed = run.install(None);
     assert!(
         installed.status.success(),
@@ -104,13 +163,19 @@ fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
         receipt,
         format!("release_uri={uri}\narchive_sha256={digest}\nplatform={platform}\n").as_bytes()
     );
-    let executable = directory.join("Chromium.app/Contents/MacOS/Chromium");
+    let selection_path = home.join(".local/share/weles-chromium/selected");
+    let selection = fs::read(&selection_path).expect("delivery records the selected release");
+    assert_eq!(
+        selection,
+        format!("version={version}\nsha256={digest}\n").as_bytes()
+    );
+    let executable = directory.join(executable_path);
     let identity = run.command(
         "real installed browser identity",
         Command::new(&executable).arg("--version"),
     );
     assert!(identity.status.success());
-    assert!(String::from_utf8_lossy(&identity.stdout).contains(&version));
+    assert!(String::from_utf8_lossy(&identity.stdout).contains(upstream.trim()));
     let hash = run.command(
         "installed executable digest",
         Command::new("shasum").args(["-a", "256"]).arg(&executable),
@@ -133,6 +198,7 @@ fn installs_real_bundle_and_refuses_conflicting_archive_digest() {
     assert!(!refused.status.success());
     assert!(String::from_utf8_lossy(&refused.stderr).contains("archive checksum mismatch"));
     assert_eq!(fs::read(directory.join(".weles-release")).unwrap(), receipt);
+    assert_eq!(fs::read(&selection_path).unwrap(), selection);
     let lock = directory
         .parent()
         .unwrap()

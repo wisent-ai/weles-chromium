@@ -12,8 +12,12 @@ set -euo pipefail
 
 refuse() { printf 'Chromium release delivery: %s\n' "$*" >/dev/stderr; false; }
 [ "$WISENT_PRODUCT" = weles-chromium ] || refuse "unexpected product: $WISENT_PRODUCT"
-[ "$WISENT_PLATFORM" = darwin-arm64 ] || refuse "unsupported platform: $WISENT_PLATFORM"
-[ "$(uname -s)-$(uname -m)" = Darwin-arm64 ] || refuse "delivery requires a Darwin arm64 host"
+host="$(uname -s)-$(uname -m)"
+case "$WISENT_PLATFORM:$host" in
+  darwin-arm64:Darwin-arm64) binary="Chromium.app/Contents/MacOS/Chromium" ;;
+  linux-amd64:Linux-x86_64) binary="chromium/chrome" ;;
+  *) refuse "release platform $WISENT_PLATFORM cannot be installed on $host" ;;
+esac
 case "$WISENT_VERSION" in
   ''|.*|*[![:alnum:]._+-]*) refuse "unsafe release version: $WISENT_VERSION" ;;
 esac
@@ -33,12 +37,22 @@ mkdir -p "$root"
 root="$(cd "$root" && pwd -P)"
 destination="$root/$WISENT_VERSION"
 receipt="$(printf 'release_uri=%s\narchive_sha256=%s\nplatform=%s' "$expected_uri" "$observed" "$WISENT_PLATFORM")"
-binary="Chromium.app/Contents/MacOS/Chromium"
 verify() {
   local tree="$1"
   [ -f "$tree/$binary" ] && [ -x "$tree/$binary" ] || refuse "missing executable: $tree/$binary"
   [ -f "$tree/.weles-release" ] && [ ! -L "$tree/.weles-release" ] || refuse "missing regular receipt: $tree/.weles-release"
   cmp -s "$tree/.weles-release" <(printf '%s\n' "$receipt") || refuse "installed receipt conflicts with selected release: $tree/.weles-release"
+}
+# The release this delivery verified becomes the host's selection: Weles's
+# find_browser launches the release this record names, unless the deployment
+# pins one through WELES_CHROMIUM_RELEASE_VERSION/SHA256. A rename replaces
+# the record whole, so a reader never sees half of one.
+select_release() {
+  local record
+  record="$(mktemp "$root/.selected.XXXXXXXX")"
+  printf 'version=%s\nsha256=%s\n' "$WISENT_VERSION" "$observed" > "$record"
+  mv -f "$record" "$root/selected"
+  printf 'Selected Chromium release for Weles: %s\n' "$WISENT_VERSION"
 }
 lock="$root/.install-$WISENT_VERSION.lock"
 mkdir "$lock" || refuse "another installation owns $lock; inspect that delivery before removing its lock"
@@ -53,12 +67,13 @@ trap cleanup EXIT
 if [ -e "$destination" ] || [ -L "$destination" ]; then
   [ -d "$destination" ] && [ ! -L "$destination" ] || refuse "installed destination is not a regular directory: $destination"
   verify "$destination"
+  select_release
   printf 'Verified installed Chromium release: %s\n' "$destination"
   exit
 fi
 
-# Isolated extraction never replaces an installed release. macOS libarchive
-# refuses archive members that escape this fresh directory.
+# Isolated extraction never replaces an installed release. Native tar refuses
+# archive members that escape this fresh directory.
 staging="$(mktemp -d "$root/.install-$WISENT_VERSION.XXXXXXXX")"
 /usr/bin/tar -xzf "$WISENT_RELEASE_ARCHIVE" -C "$staging"
 [ -f "$staging/$binary" ] && [ -x "$staging/$binary" ] || refuse "release archive lacks executable $binary"
@@ -71,4 +86,5 @@ mv -n "$staging" "$destination"
 # Publication transferred ownership; cleanup must not remove installed bytes.
 staging=''
 verify "$destination"
+select_release
 printf 'Installed verified Chromium release: %s\n' "$destination"
