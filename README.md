@@ -24,9 +24,9 @@ that apply on top of a pinned upstream.
 
 | | |
 |---|---|
-| Upstream version | **147.0.7727.108** |
-| Fork point (patch base) | `e74a8f5bfafeb` (last upstream commit before the weles series) |
-| Local working branch | `weles-147` in `chromium-build/src` |
+| Upstream version | `upstreamVersion` in `browser-capabilities.json` |
+| Fork point (patch base) | `forkPoint` in `browser-capabilities.json`: the last upstream commit before the weles series |
+| Local working branch | `weles-<upstream major version>` in `chromium-build/src` |
 
 Bump the upstream version + fork point together on a rebase, and re-export the
 series (see "Re-exporting" below).
