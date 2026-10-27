@@ -15,6 +15,11 @@ publish = false
 name = "installation"
 path = "installation.rs"
 
+# Run by the release worker after each build, against the bundle it staged.
+[[test]]
+name = "built_bundle"
+path = "built_bundle.rs"
+
 # source_state.rs is a module of this journey.
 [[test]]
 name = "source_admission"

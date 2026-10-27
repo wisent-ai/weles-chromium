@@ -20,6 +20,12 @@
       "build": {
         "argv": ["bash", "release/build.sh"]
       },
+      "tests": [
+        {
+          "name": "built-bundle",
+          "argv": ["cargo", "test", "--manifest-path", "tests/release/Cargo.toml", "--test", "built_bundle", "--", "--nocapture"]
+        }
+      ],
       "stage": {
         "stage/Chromium.app": "Chromium.app"
       },
@@ -36,6 +42,12 @@
       "build": {
         "argv": ["bash", "release/build.sh"]
       },
+      "tests": [
+        {
+          "name": "built-bundle",
+          "argv": ["cargo", "test", "--manifest-path", "tests/release/Cargo.toml", "--test", "built_bundle", "--", "--nocapture"]
+        }
+      ],
       "stage": {
         "stage/chromium": "chromium"
       },
